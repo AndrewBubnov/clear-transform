@@ -1,5 +1,4 @@
-import { useEffect, useRef } from 'react'
-import { Link, Router, createRouter, useNavigate } from 'clear-react-router'
+import { Link, Router, createRouter } from 'clear-react-router'
 import { DashboardDemo } from './demo/DashboardDemo'
 import { FreeDemo } from './demo/FreeDemo'
 import { KanbanDemo } from './demo/KanbanDemo'
@@ -14,25 +13,14 @@ const tabs = [
   { to: '/dashboard', label: 'Dashboard grid' },
 ]
 
-function RedirectToFree() {
-  const navigate = useNavigate()
-  const done = useRef(false)
-  useEffect(() => {
-    if (done.current) return
-    done.current = true
-    navigate('/free')
-  }, [navigate])
-  return null
-}
-
 const routes = createRouter([
-  { path: '/', element: <RedirectToFree /> },
+  { path: '/', element: null, beforeLoad: ({redirect}) => redirect('/free') },
   { path: '/free', element: <FreeDemo /> },
   { path: '/resize', element: <ResizeDemo /> },
   { path: '/sortable', element: <SortableDemo /> },
   { path: '/kanban', element: <KanbanDemo /> },
   { path: '/dashboard', element: <DashboardDemo /> },
-  { path: '*', element: <RedirectToFree /> },
+  { path: '*', element: null, beforeLoad: ({redirect}) => redirect('/free') },
 ])
 
 function tabClass({ isActive }: { isActive: boolean }) {

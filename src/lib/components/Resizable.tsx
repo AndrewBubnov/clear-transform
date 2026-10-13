@@ -32,8 +32,12 @@ export function Resizable({ children, ref: outerRef, style, className, showHandl
         width: size.width,
         height: size.height,
         ...style,
-        // N/W handles move the box origin — the dragged edge follows the cursor.
-        transform: `translate(${position.x}px, ${position.y}px)`,
+        // N/W handles shift the box origin via margins (not transform):
+        // the layout footprint stays consistent, so the opposite edge
+        // stays put AND the parent doesn't grow. A transform would move
+        // the box visually while its layout box still grows the parent.
+        marginTop: position.y,
+        marginLeft: position.x,
       }}
     >
       {children}

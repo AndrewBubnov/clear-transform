@@ -49,9 +49,10 @@ describe('Resizable', () => {
     fireEvent.pointerDown(n, { clientX: 0, clientY: 0, button: 0 })
     fireEvent.pointerMove(window, { clientX: 0, clientY: 30 })
     fireEvent.pointerUp(window)
-    // Height shrinks by 30 AND the box shifts down by 30,
-    // so the bottom edge stays where it was.
+    // Height shrinks by 30 AND the box shifts down by 30 via margin,
+    // so the bottom edge stays where it was (and the parent doesn't grow).
     expect(box.style.height).toBe('70px')
-    expect(box.style.transform).toBe('translate(0px, 30px)')
+    expect(box.style.marginTop).toBe('30px')
+    expect(box.style.transform).toBe('')
   })
 })
