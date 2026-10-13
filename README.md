@@ -1,4 +1,4 @@
-# clear-draggable
+# clear-transform
 
 Pointer-based drag-and-drop + resize primitives for React 19.3. Zero runtime dependencies.
 
@@ -17,7 +17,7 @@ Pointer-based drag-and-drop + resize primitives for React 19.3. Zero runtime dep
 ## Install
 
 ```bash
-npm install clear-draggable
+npm install clear-transform
 ```
 
 > v0.1 lives in `src/lib` of this repo and is published via `npm run build:lib`
@@ -28,7 +28,7 @@ npm install clear-draggable
 ### Free dragging
 
 ```tsx
-import { Draggable } from 'clear-draggable'
+import { Draggable } from 'clear-transform'
 
 <Draggable defaultPosition={{ x: 40, y: 20 }} bounds={{ minX: 0, minY: 0 }} grid={16}>
   <div>drag me</div>
@@ -38,7 +38,7 @@ import { Draggable } from 'clear-draggable'
 Or the hook, when you need your own node:
 
 ```tsx
-import { useDraggable } from 'clear-draggable'
+import { useDraggable } from 'clear-transform'
 
 const { position, isDragging, dragHandleProps } = useDraggable({
   defaultPosition: { x: 0, y: 0 },
@@ -55,7 +55,7 @@ Controlled mode: pass `position` + `onPositionChange` instead of `defaultPositio
 ### Resize (8 handles)
 
 ```tsx
-import { Resizable } from 'clear-draggable'
+import { Resizable } from 'clear-transform'
 
 <Resizable
   defaultSize={{ width: 220, height: 140 }}
@@ -76,7 +76,7 @@ the cursor — `position` is part of the resize state (`defaultPosition` /
 ### Sortable list
 
 ```tsx
-import { SortableList } from 'clear-draggable'
+import { SortableList } from 'clear-transform'
 
 const [items, setItems] = useState([{ id: 'a' }, { id: 'b' }])
 
@@ -90,15 +90,16 @@ const [items, setItems] = useState([{ id: 'a' }, { id: 'b' }])
 />
 ```
 
-The dragged item follows the cursor as a fixed overlay (whole-pixel positioned,
-moved imperatively — no re-render per mousemove); the origin slot dims as a
-placeholder. Items are measured via `fragment.getClientRects()`, no
-`querySelector` needed.
+The dragged item is lifted out of the flow (ghost only) so the rest close
+ranks immediately, and a gap opens at the drop position while reorder commits
+once, on drop. Items are measured via per-item refs in array order — never by
+DOM index and never through the open gap — so rapid pointer moves can't skew
+the mapping. No `querySelector` needed.
 
 ### Kanban
 
 ```tsx
-import { KanbanBoard } from 'clear-draggable'
+import { KanbanBoard } from 'clear-transform'
 
 const [cards, setCards] = useState([{ id: 'c1', columnId: 'todo' }])
 
@@ -117,7 +118,7 @@ at the end of the column; dropping into the same column is a no-op.
 ### Dashboard grid (miro-like board)
 
 ```tsx
-import { DashboardGrid } from 'clear-draggable'
+import { DashboardGrid } from 'clear-transform'
 
 const [widgets, setWidgets] = useState([{ id: 'w1', x: 8, y: 8, w: 180, h: 110 }])
 

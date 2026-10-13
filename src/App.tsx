@@ -33,7 +33,7 @@ function App() {
   return (
     <div className="mx-auto max-w-5xl p-6">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold">clear-draggable — sandbox</h1>
+        <h1 className="text-2xl font-bold">clear-transform — sandbox</h1>
         <p className="text-sm text-gray-500">React 19.3 • drag + resize • vitest • Vercel-ready</p>
       </header>
       <nav className="mb-6 flex flex-wrap gap-2">

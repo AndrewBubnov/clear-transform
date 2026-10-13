@@ -38,25 +38,24 @@ const HANDLE_CURSORS: Record<ResizeHandle, string> = {
 const HANDLE_COLOR = '#6366f1'
 
 /**
- * Invisible hit areas: edge strips span the full side, straddling the border;
- * corners are small squares. No visible boxes — the 1px edge line appears
- * only on hover/active via an inset box-shadow (inline styles can't do :hover).
+ * Invisible hit areas: edge strips span the full side *inside* the box,
+ * corners are small squares inside the corners. Inset strips keep the 1px
+ * hover line exactly on the box perimeter by construction (an inset shadow
+ * always draws at the strip edge, so a straddling strip would offset the line).
  */
 function handleGeometry(handle: ResizeHandle): CSSProperties {
   const base: CSSProperties = { position: 'absolute', zIndex: 10 }
   const edge = 8
-  const edgeOffset = -edge / 2
   const corner = 12
-  const cornerOffset = -corner / 2
   switch (handle) {
-    case 'n': return { ...base, top: edgeOffset, left: 0, right: 0, height: edge }
-    case 's': return { ...base, bottom: edgeOffset, left: 0, right: 0, height: edge }
-    case 'e': return { ...base, top: 0, bottom: 0, right: edgeOffset, width: edge }
-    case 'w': return { ...base, top: 0, bottom: 0, left: edgeOffset, width: edge }
-    case 'ne': return { ...base, top: cornerOffset, right: cornerOffset, width: corner, height: corner }
-    case 'nw': return { ...base, top: cornerOffset, left: cornerOffset, width: corner, height: corner }
-    case 'se': return { ...base, bottom: cornerOffset, right: cornerOffset, width: corner, height: corner }
-    case 'sw': return { ...base, bottom: cornerOffset, left: cornerOffset, width: corner, height: corner }
+    case 'n': return { ...base, top: 0, left: 0, right: 0, height: edge }
+    case 's': return { ...base, bottom: 0, left: 0, right: 0, height: edge }
+    case 'e': return { ...base, top: 0, bottom: 0, right: 0, width: edge }
+    case 'w': return { ...base, top: 0, bottom: 0, left: 0, width: edge }
+    case 'ne': return { ...base, top: 0, right: 0, width: corner, height: corner }
+    case 'nw': return { ...base, top: 0, left: 0, width: corner, height: corner }
+    case 'se': return { ...base, bottom: 0, right: 0, width: corner, height: corner }
+    case 'sw': return { ...base, bottom: 0, left: 0, width: corner, height: corner }
   }
 }
 

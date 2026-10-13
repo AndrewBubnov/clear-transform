@@ -1,4 +1,4 @@
-# clear-draggable — agent guidelines
+# clear-transform — agent guidelines
 
 ## Code style
 - All code comments, JSDoc, and demo UI copy in English only.
@@ -38,7 +38,12 @@
 - Test descriptions in English.
 
 ## Verification
-- `npm test` (14+ tests green), `npm run build` (demo → `dist`, Vercel-ready),
+- `npm test` (28 tests green), `npm run build` (demo → `dist`, Vercel-ready),
   `npm run build:lib` (es+cjs+dts → `dist-lib`).
+- CI (`.github/workflows/ci.yml`) runs `npm ci` + test + both builds
+  on every push/PR (Node 22, ubuntu).
+- Windows caveat: never run `npm ci` while the dev server is up — the Vite
+  native binding stays file-locked and `node_modules` ends up half-deleted.
+  Stop dev first, then reinstall.
 - Remove `dist`/`dist-lib` after verification (both gitignored).
 - Git is handled by the user — never commit/push.
