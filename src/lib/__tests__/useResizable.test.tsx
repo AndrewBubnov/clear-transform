@@ -55,4 +55,28 @@ describe('Resizable', () => {
     expect(box.style.marginTop).toBe('30px')
     expect(box.style.transform).toBe('')
   })
+
+  it('handles are invisible until hovered, edges span the full side', () => {
+    render(
+      <Resizable defaultSize={{ width: 200, height: 100 }}>
+        <span>content</span>
+      </Resizable>,
+    )
+    const n = document.querySelector('[data-handle="n"]') as HTMLElement
+    const e = document.querySelector('[data-handle="e"]') as HTMLElement
+    // Full-side strips, no visible boxes in idle state.
+    expect(n.style.left).toBe('0px')
+    expect(n.style.right).toBe('0px')
+    expect(e.style.top).toBe('0px')
+    expect(e.style.bottom).toBe('0px')
+    expect(n.style.boxShadow).toBe('none')
+
+    fireEvent.pointerOver(n)
+    expect(n.style.boxShadow).toContain('inset')
+    // Neighboring handle stays invisible.
+    expect(e.style.boxShadow).toBe('none')
+
+    fireEvent.pointerOut(n)
+    expect(n.style.boxShadow).toBe('none')
+  })
 })

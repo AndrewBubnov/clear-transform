@@ -3,7 +3,3 @@
 html, body {
   margin: 0;
 }
-
-[data-handle]:hover {
-  background: #6366f1 !important;
-}

@@ -35,20 +35,43 @@ const HANDLE_CURSORS: Record<ResizeHandle, string> = {
   se: 'nwse-resize',
 }
 
-function handlePosition(handle: ResizeHandle): CSSProperties {
+const HANDLE_COLOR = '#6366f1'
+
+/**
+ * Invisible hit areas: edge strips span the full side, straddling the border;
+ * corners are small squares. No visible boxes — the 1px edge line appears
+ * only on hover/active via an inset box-shadow (inline styles can't do :hover).
+ */
+function handleGeometry(handle: ResizeHandle): CSSProperties {
   const base: CSSProperties = { position: 'absolute', zIndex: 10 }
-  const offset = -6
-  const size = 12
-  const center = `calc(50% - ${size / 2}px)`
+  const edge = 8
+  const edgeOffset = -edge / 2
+  const corner = 12
+  const cornerOffset = -corner / 2
   switch (handle) {
-    case 'n': return { ...base, top: offset, left: center, width: size, height: size, cursor: HANDLE_CURSORS.n }
-    case 's': return { ...base, bottom: offset, left: center, width: size, height: size, cursor: HANDLE_CURSORS.s }
-    case 'e': return { ...base, right: offset, top: center, width: size, height: size, cursor: HANDLE_CURSORS.e }
-    case 'w': return { ...base, left: offset, top: center, width: size, height: size, cursor: HANDLE_CURSORS.w }
-    case 'ne': return { ...base, top: offset, right: offset, width: size, height: size, cursor: HANDLE_CURSORS.ne }
-    case 'nw': return { ...base, top: offset, left: offset, width: size, height: size, cursor: HANDLE_CURSORS.nw }
-    case 'se': return { ...base, bottom: offset, right: offset, width: size, height: size, cursor: HANDLE_CURSORS.se }
-    case 'sw': return { ...base, bottom: offset, left: offset, width: size, height: size, cursor: HANDLE_CURSORS.sw }
+    case 'n': return { ...base, top: edgeOffset, left: 0, right: 0, height: edge }
+    case 's': return { ...base, bottom: edgeOffset, left: 0, right: 0, height: edge }
+    case 'e': return { ...base, top: 0, bottom: 0, right: edgeOffset, width: edge }
+    case 'w': return { ...base, top: 0, bottom: 0, left: edgeOffset, width: edge }
+    case 'ne': return { ...base, top: cornerOffset, right: cornerOffset, width: corner, height: corner }
+    case 'nw': return { ...base, top: cornerOffset, left: cornerOffset, width: corner, height: corner }
+    case 'se': return { ...base, bottom: cornerOffset, right: cornerOffset, width: corner, height: corner }
+    case 'sw': return { ...base, bottom: cornerOffset, left: cornerOffset, width: corner, height: corner }
+  }
+}
+
+/** 1px line exactly on the box perimeter for the hovered/active handle. */
+function handleLine(handle: ResizeHandle): string {
+  const c = HANDLE_COLOR
+  switch (handle) {
+    case 'n': return `inset 0 1px 0 0 ${c}`
+    case 's': return `inset 0 -1px 0 0 ${c}`
+    case 'e': return `inset -1px 0 0 0 ${c}`
+    case 'w': return `inset 1px 0 0 0 ${c}`
+    case 'ne': return `inset -1px 0 0 0 ${c}, inset 0 1px 0 0 ${c}`
+    case 'nw': return `inset 1px 0 0 0 ${c}, inset 0 1px 0 0 ${c}`
+    case 'se': return `inset -1px 0 0 0 ${c}, inset 0 -1px 0 0 ${c}`
+    case 'sw': return `inset 1px 0 0 0 ${c}, inset 0 -1px 0 0 ${c}`
   }
 }
 
@@ -72,6 +95,8 @@ export function useResizable(options: UseResizableOptions = {}) {
   const [uncontrolledPosition, setUncontrolledPosition] = useState<Position>(defaultPosition)
   const [isResizing, setIsResizing] = useState(false)
   const [activeHandle, setActiveHandle] = useState<ResizeHandle | null>(null)
+  // :hover can't be expressed with inline styles — track it in state.
+  const [hoveredHandle, setHoveredHandle] = useState<ResizeHandle | null>(null)
   const ref = useRef<HTMLElement | null>(null)
   const resizeRef = useRef<{
     handle: ResizeHandle
@@ -155,18 +180,24 @@ export function useResizable(options: UseResizableOptions = {}) {
     [disabled, controlled, uncontrolled, controlledPosition, uncontrolledPosition, min, max, aspectRatio, applySize, applyPosition, onResizeStart, onResizeEnd],
   )
 
-  const resizeHandleProps = (handle: ResizeHandle) => ({
-    'data-handle': handle,
-    onPointerDown: startResize(handle),
-    style: {
-      ...handlePosition(handle),
-      touchAction: 'none',
-      background: '#fff',
-      border: '1px solid #6366f1',
-      borderRadius: 3,
-    } as CSSProperties,
-    'aria-label': `resize-${handle}`,
-  })
+  const resizeHandleProps = (handle: ResizeHandle) => {
+    const highlighted = hoveredHandle === handle || activeHandle === handle
+    return {
+      'data-handle': handle,
+      onPointerDown: startResize(handle),
+      onPointerEnter: () => setHoveredHandle(handle),
+      onPointerLeave: () => setHoveredHandle((prev) => (prev === handle ? null : prev)),
+      style: {
+        ...handleGeometry(handle),
+        cursor: HANDLE_CURSORS[handle],
+        touchAction: 'none',
+        background: 'transparent',
+        // Idle: a plain div, nothing visible. Hover/active: 1px edge line.
+        boxShadow: highlighted ? handleLine(handle) : 'none',
+      } as CSSProperties,
+      'aria-label': `resize-${handle}`,
+    }
+  }
 
   return {
     ref: ref as Ref<HTMLElement>,
