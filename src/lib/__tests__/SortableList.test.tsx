@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SortableList } from '../components/SortableList'
@@ -152,6 +152,92 @@ describe('SortableList', () => {
     fireEvent.pointerUp(window, { clientX: 10, clientY: 10 })
     expect(screen.getByTestId('order').textContent).toBe('b,a,c')
     expect(document.querySelector('[data-sortable-ghost]')).toBeNull()
+  })
+
+  // jsdom has no Element.animate: stub it to test the drop fly-in path.
+  function mockAnimate() {
+    const resolvers: Array<() => void> = []
+    const effects: Array<{ keyframes: unknown; options: unknown }> = []
+    const orig = (Element.prototype as unknown as { animate?: unknown }).animate
+    ;(Element.prototype as unknown as { animate: unknown }).animate = function (
+      this: unknown,
+      keyframes: unknown,
+      options: unknown,
+    ) {
+      let resolve!: () => void
+      const finished = new Promise<void>((res) => {
+        resolve = res
+      })
+      resolvers.push(resolve)
+      effects.push({ keyframes, options })
+      return { finished, cancel: () => {} }
+    }
+    return {
+      resolvers,
+      effects,
+      restore: () => {
+        if (orig === undefined) delete (Element.prototype as unknown as { animate?: unknown }).animate
+        else (Element.prototype as unknown as { animate: unknown }).animate = orig
+      },
+    }
+  }
+
+  it('flies the ghost into the gap and commits on landing', async () => {
+    const flight = mockAnimate()
+    try {
+      render(<Interactive />)
+      const list = screen.getByRole('list')
+      const second = screen.getByText('b').closest('[data-sortable-id]') as HTMLElement
+
+      fireEvent.pointerDown(second, { clientX: 10, clientY: 60, button: 0 })
+      fireEvent.pointerMove(list, { clientX: 10, clientY: 10 })
+      fireEvent.pointerUp(list, { clientX: 10, clientY: 10 })
+
+      // Commit deferred until landing: order unchanged, ghost still flying.
+      // The end frame is pinned (fill:forwards) so the ghost can't snap
+      // back to its inline transform in the frames before unmount.
+      expect(screen.getByTestId('order').textContent).toBe('a,b,c')
+      expect(flight.resolvers).toHaveLength(1)
+      expect(flight.effects).toHaveLength(1)
+      expect(flight.effects[0].options).toMatchObject({ fill: 'forwards' })
+      expect(document.querySelector('[data-sortable-ghost]')).not.toBeNull()
+
+      await act(async () => {
+        flight.resolvers[0]()
+      })
+      expect(screen.getByTestId('order').textContent).toBe('b,a,c')
+      expect(document.querySelector('[data-sortable-ghost]')).toBeNull()
+    } finally {
+      flight.restore()
+    }
+  })
+
+  it('abandons the drop flight when a new drag starts', async () => {
+    const flight = mockAnimate()
+    try {
+      render(<Interactive />)
+      const list = screen.getByRole('list')
+      const second = screen.getByText('b').closest('[data-sortable-id]') as HTMLElement
+
+      fireEvent.pointerDown(second, { clientX: 10, clientY: 60, button: 0 })
+      fireEvent.pointerMove(list, { clientX: 10, clientY: 10 })
+      fireEvent.pointerUp(list, { clientX: 10, clientY: 10 })
+      expect(flight.resolvers).toHaveLength(1)
+
+      // Grab another item mid-flight: the pending commit is abandoned.
+      const third = screen.getByText('c').closest('[data-sortable-id]') as HTMLElement
+      fireEvent.pointerDown(third, { clientX: 10, clientY: 110, button: 0 })
+      await act(async () => {
+        flight.resolvers[0]()
+      })
+      expect(screen.getByTestId('order').textContent).toBe('a,b,c')
+
+      // Cleanup the second drag (no-op drop at its own area).
+      fireEvent.pointerUp(list, { clientX: 10, clientY: 110 })
+      expect(document.querySelector('[data-sortable-ghost]')).toBeNull()
+    } finally {
+      flight.restore()
+    }
   })
 
   it('prefers renderGhost for the overlay when provided', () => {

@@ -1,5 +1,7 @@
 # clear-transform
 
+[![CI](https://github.com/AndrewBubnov/clear-transform/actions/workflows/ci.yml/badge.svg)](https://github.com/AndrewBubnov/clear-transform/actions)
+
 Pointer-based drag-and-drop + resize primitives for React 19.3. Zero runtime dependencies.
 
 - **Drag** — free dragging with bounds and grid snap
@@ -92,7 +94,11 @@ const [items, setItems] = useState([{ id: 'a' }, { id: 'b' }])
 
 The dragged item is lifted out of the flow (ghost only) so the rest close
 ranks immediately, and a gap opens at the drop position while reorder commits
-once, on drop. Items are measured via per-item refs in array order — never by
+once, on drop. On release the ghost flies into the gap (200ms) and the commit
+lands with it; grabbing mid-flight abandons the pending drop cleanly.
+Items glide to their new spots with a FLIP animation
+(Web Animations API, skipped under `prefers-reduced-motion`).
+Items are measured via per-item refs in array order — never by
 DOM index and never through the open gap — so rapid pointer moves can't skew
 the mapping. No `querySelector` needed.
 

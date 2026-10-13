@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode, Ref, RefObject } from 'react'
 import type { FragmentInstance } from 'react'
 import { getInsertionIndex, moveItemInArray } from '../utils/geometry'
@@ -72,6 +72,11 @@ export function SortableList<T extends SortableItem>({
   // Live item nodes keyed by id. Used only to (re)capture the frozen
   // frame — never for per-move measuring.
   const itemRefs = useRef(new Map<string, HTMLDivElement>())
+  // Last known rects per id. A node missing mid-flight (the previous ghost,
+  // never committed) still sits at its last spot — memory keeps grabs working
+  // during the 200ms flight instead of dead-bailing. Rebuilt on every
+  // successful measure, so it never goes stale.
+  const lastRects = useRef(new Map<string, ItemRect>())
   const ghostRef = useRef<HTMLDivElement | null>(null)
   // Window listeners attached for the active drag (release backup outside
   // the container + scroll/resize re-freeze). Detached on finish.
@@ -83,6 +88,14 @@ export function SortableList<T extends SortableItem>({
   // Latest ghost position. Updated imperatively on every move (no re-render);
   // read during render so re-renders caused by drop-index changes keep the ghost put.
   const ghostPos = useRef({ x: 0, y: 0 })
+  // FLIP bookkeeping: tops from the last committed layout + running animations.
+  const prevTops = useRef(new Map<string, number>())
+  const animations = useRef<Animation[]>([])
+  // Pending drop fly-in: commit runs when the ghost lands in the gap.
+  // Abandoned (never committed) when a new drag starts or on unmount.
+  const pendingDrop = useRef<{ anim: Animation; from: number; to: number } | null>(null)
+  // The open gap node — the fly-in target. Only one gap renders at a time.
+  const gapRef = useRef<HTMLDivElement | null>(null)
   const [ghost, setGhost] = useState<Ghost | null>(null)
   // Insertion index in collapsed coordinates (dragged item excluded).
   // Reorder commits once, on drop — during the drag only the gap moves.
@@ -101,6 +114,77 @@ export function SortableList<T extends SortableItem>({
     else itemRefs.current.delete(id)
   }
 
+  const cancelAnimations = () => {
+    for (const anim of animations.current) {
+      try {
+        anim.cancel()
+      } catch {
+        // Already finished — nothing to cancel.
+      }
+    }
+    animations.current = []
+  }
+
+  /** Abandon a mid-fly drop commit (new grab or unmount). The list was never reordered. */
+  const cancelPendingDrop = () => {
+    const p = pendingDrop.current
+    pendingDrop.current = null
+    if (!p) return
+    try {
+      p.anim.cancel()
+    } catch {
+      // Already finished — nothing to cancel.
+    }
+  }
+
+  const prefersReducedMotion = () =>
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  // FLIP: when the gap moves (or items reorder on drop), glide items from
+  // their previous tops to the new ones instead of jumping. Web Animations
+  // leave no inline-style residue, so measuring stays clean.
+  useLayoutEffect(() => {
+    if (prefersReducedMotion()) {
+      prevTops.current.clear()
+      return
+    }
+    for (const item of items) {
+      const el = itemRefs.current.get(item.id)
+      if (!el || typeof el.animate !== 'function') {
+        prevTops.current.delete(item.id)
+        continue
+      }
+      const axis = orientation === 'vertical' ? 'top' : 'left'
+      const pos = el.getBoundingClientRect()[axis]
+      const prev = prevTops.current.get(item.id)
+      prevTops.current.set(item.id, pos)
+      if (prev === undefined) continue
+      const delta = prev - pos
+      if (delta === 0) continue
+      const prop = orientation === 'vertical' ? 'translateY' : 'translateX'
+      const anim = el.animate(
+        [{ transform: `${prop}(${delta}px)` }, { transform: `${prop}(0px)` }],
+        { duration: 180, easing: 'ease-out' },
+      )
+      animations.current.push(anim)
+    }
+    // Drop bookkeeping for unmounted ids.
+    for (const id of [...prevTops.current.keys()]) {
+      if (!items.some((item) => item.id === id)) prevTops.current.delete(id)
+    }
+  }, [items, dropIndex, orientation])
+
+  // Unmount cleanup for in-flight animations and pending drops.
+  useEffect(
+    () => () => {
+      cancelAnimations()
+      cancelPendingDrop()
+    },
+    [],
+  )
+
   const detachWindowListeners = () => {
     const l = windowListeners.current
     windowListeners.current = null
@@ -111,18 +195,27 @@ export function SortableList<T extends SortableItem>({
     window.removeEventListener('resize', l.refreeze)
   }
 
+  const toCollapsed = (r: { top: number; left: number; width: number; height: number }): ItemRect => ({
+    top: orientation === 'vertical' ? r.top : r.left,
+    height: (orientation === 'vertical' ? r.height : r.width) || 1,
+  })
+
   /** Measure visible items (dragged excluded) in items order. Null on missing nodes. */
   const measureCollapsed = (dragId: string): ItemRect[] | null => {
     const rects: ItemRect[] = []
+    const memory = new Map<string, ItemRect>()
     for (const item of items) {
       if (item.id === dragId) continue
-      const r = itemRefs.current.get(item.id)?.getBoundingClientRect()
-      if (!r) return null
-      rects.push({
-        top: orientation === 'vertical' ? r.top : r.left,
-        height: (orientation === 'vertical' ? r.height : r.width) || 1,
-      })
+      const live = itemRefs.current.get(item.id)?.getBoundingClientRect()
+      // A node missing mid-flight (a previous ghost, never committed) still
+      // sits at its last known spot — reuse memory so grabs never dead-bail.
+      // Missing with no memory means mid-mount: bail safely, never mis-map.
+      const mapped = live ? toCollapsed(live) : lastRects.current.get(item.id)
+      if (!mapped) return null
+      memory.set(item.id, mapped)
+      rects.push(mapped)
     }
+    lastRects.current = memory
     return rects
   }
 
@@ -145,6 +238,16 @@ export function SortableList<T extends SortableItem>({
     const offsetY = e.clientY - rect.top
     const frozen = measureCollapsed(id)
     if (!frozen) return
+    // Seed memory with the lifted item: a grab overlapping this flight
+    // finds it here (it never committed anywhere else).
+    lastRects.current.set(id, toCollapsed(rect))
+    // A new grab measures clean positions — kill leftover animations first.
+    // A mid-fly drop from a previous drag is abandoned (never committed).
+    cancelAnimations()
+    cancelPendingDrop()
+    // Drop FLIP history for the lifted item: on landing it must appear
+    // exactly where the ghost was, not glide in again from the origin.
+    prevTops.current.delete(id)
     dragRef.current = { id, offsetX, offsetY, frozen }
     // Rounded here too — the ghost mounts with these coords before
     // the first moveGhost call (see moveGhost for why).
@@ -217,22 +320,69 @@ export function SortableList<T extends SortableItem>({
   const finishDrag = (commit: boolean, point?: { clientX: number; clientY: number }) => {
     const drag = dragRef.current
     dragRef.current = null
-    setGhost(null)
-    setDropIndex(null)
     detachWindowListeners()
     if (!commit || !drag || !point) {
+      // Abort: instant cleanup, nothing committed.
+      setGhost(null)
+      setDropIndex(null)
       return
     }
     // Recompute at drop point against the same frozen frame as the moves,
     // so the drop always lands where shown — no drift possible.
     const resolved = resolveDropIndex(drag, point.clientX, point.clientY)
-    if (!resolved) return
+    if (!resolved) {
+      setGhost(null)
+      setDropIndex(null)
+      return
+    }
     const { from, to } = resolved
     // Landing back at the origin slot is a no-op (same index in collapsed
     // coordinates means the array comes back unchanged).
-    if (to !== from) {
-      onReorder(moveItemInArray(items, from, to))
+    if (to === from) {
+      setGhost(null)
+      setDropIndex(null)
+      return
     }
+    // Fly the ghost into the open gap, commit on landing. The ghost stays
+    // mounted (and the gap stays open) for the flight duration.
+    const gapEl = gapRef.current
+    const ghostEl = ghostRef.current
+    if (!gapEl || !ghostEl || typeof ghostEl.animate !== 'function' || prefersReducedMotion()) {
+      onReorder(moveItemInArray(items, from, to))
+      setGhost(null)
+      setDropIndex(null)
+      return
+    }
+    const gr = gapEl.getBoundingClientRect()
+    const fromX = ghostPos.current.x
+    const fromY = ghostPos.current.y
+    const toX = Math.round(gr.left)
+    const toY = Math.round(gr.top)
+    // fill:forwards pins the end frame: without it the effect lifts on
+    // finish and the ghost snaps back to its inline transform for the
+    // frames before React unmounts it (30-50ms blink).
+    const anim = ghostEl.animate(
+      [
+        { transform: `translate(${fromX}px, ${fromY}px)` },
+        { transform: `translate(${toX}px, ${toY}px)` },
+      ],
+      { duration: 200, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' },
+    )
+    const token = { anim, from, to }
+    pendingDrop.current = token
+    anim.finished.then(() => {
+      // A new grab or unmount abandons the flight (list was never reordered).
+      if (pendingDrop.current !== token) return
+      pendingDrop.current = null
+      // Sync the inline position too: if anything renders the ghost once
+      // more before unmount, it must already sit at the landing.
+      ghostPos.current = { x: toX, y: toY }
+      onReorder(moveItemInArray(items, from, to))
+      setGhost(null)
+      setDropIndex(null)
+    }).catch(() => {
+      // Cancelled mid-flight — cleanup already handled by the canceller.
+    })
   }
 
   const endDrag = (e: ReactPointerEvent) => finishDrag(true, { clientX: e.clientX, clientY: e.clientY })
@@ -264,6 +414,7 @@ export function SortableList<T extends SortableItem>({
           <Fragment key={item.id}>
             {showGap && dropIndex === index && (
               <div
+                ref={gapRef}
                 data-sortable-gap
                 aria-hidden="true"
                 style={{
@@ -291,6 +442,7 @@ export function SortableList<T extends SortableItem>({
         ))}
         {showGap && dropIndex === visibleItems.length && (
           <div
+            ref={gapRef}
             data-sortable-gap
             aria-hidden="true"
             style={{
