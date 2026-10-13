@@ -12,6 +12,9 @@ describe('Draggable', () => {
     )
     const box = screen.getByText('box').parentElement!
     expect(box.style.transform).toBe('translate(0px, 0px)')
+    // Out-of-flow by default: translate() maps to the container origin,
+    // in-flow boxes would grow a page scrollbar and slide under siblings.
+    expect(box.style.position).toBe('absolute')
 
     fireEvent.pointerDown(box, { clientX: 10, clientY: 10, button: 0 })
     fireEvent.pointerMove(box, { clientX: 60, clientY: 40 })

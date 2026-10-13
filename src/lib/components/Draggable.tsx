@@ -11,7 +11,7 @@ interface DraggableProps extends UseDraggableOptions {
 }
 
 export function Draggable({ children, ref: outerRef, style, className, ...options }: DraggableProps) {
-  const { position, isDragging, dragHandleProps } = useDraggable(options)
+  const { isDragging, dragHandleProps, dragStyle } = useDraggable(options)
 
   // Merge the hook's inner ref with the outer ref via callback
   const setRefs = (el: HTMLDivElement | null) => {
@@ -27,16 +27,8 @@ export function Draggable({ children, ref: outerRef, style, className, ...option
       className={className}
       data-dragging={isDragging}
       style={{
-        ...dragHandleProps.style,
-        // Absolute by default: translate() maps to the (relative) container
-        // origin. An in-flow wrapper would offset every box by its layout
-        // position and clamp it below that line via bounds.
-        position: 'absolute',
-        top: 0,
-        left: 0,
+        ...dragStyle,
         ...style,
-        transform: `translate(${position.x}px, ${position.y}px)`,
-        userSelect: 'none',
       }}
     >
       {children}

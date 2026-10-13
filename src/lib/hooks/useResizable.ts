@@ -198,6 +198,17 @@ export function useResizable(options: UseResizableOptions = {}) {
     }
   }
 
+  // Ready-to-spread visual style: everything the resize owns (box size
+  // plus the N/W origin shift via margins, so the opposite edge stays put
+  // and the parent doesn't grow). Spread it first, your style after.
+  const resizeStyle: CSSProperties = {
+    position: 'relative',
+    width: size.width,
+    height: size.height,
+    marginTop: position.y,
+    marginLeft: position.x,
+  }
+
   return {
     ref: ref as Ref<HTMLElement>,
     size,
@@ -206,6 +217,7 @@ export function useResizable(options: UseResizableOptions = {}) {
     activeHandle,
     handles: ALL_HANDLES,
     resizeHandleProps,
+    resizeStyle,
     setSize: applySize,
     setPosition: applyPosition,
   }

@@ -12,7 +12,7 @@ interface ResizableProps extends UseResizableOptions {
 }
 
 export function Resizable({ children, ref: outerRef, style, className, showHandles = true, ...options }: ResizableProps) {
-  const { ref, size, position, handles, resizeHandleProps } = useResizable(options)
+  const { ref, handles, resizeHandleProps, resizeStyle } = useResizable(options)
 
   const setRefs = (el: HTMLDivElement | null) => {
     const inner = ref as RefObject<HTMLDivElement | null>
@@ -27,18 +27,7 @@ export function Resizable({ children, ref: outerRef, style, className, showHandl
     <div
       ref={setRefs}
       className={className}
-      style={{
-        position: 'relative',
-        width: size.width,
-        height: size.height,
-        ...style,
-        // N/W handles shift the box origin via margins (not transform):
-        // the layout footprint stays consistent, so the opposite edge
-        // stays put AND the parent doesn't grow. A transform would move
-        // the box visually while its layout box still grows the parent.
-        marginTop: position.y,
-        marginLeft: position.x,
-      }}
+      style={{ ...resizeStyle, ...style }}
     >
       {children}
       {showHandles &&

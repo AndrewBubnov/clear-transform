@@ -100,15 +100,28 @@ export function useDraggable(options: UseDraggableOptions = {}) {
     }
   }, [disabled, setPosition, controlled, uncontrolled, onDragEnd])
 
+  // Ready-to-spread visual style: everything the drag owns.
+  // Absolute by default so translate() maps to the (relative) container
+  // origin. In-flow translated boxes keep their layout footprint (visual
+  // overflow grows a page scrollbar) and slide under positioned siblings,
+  // losing pointer events — free drag needs out-of-flow.
+  // Spread it first, your style after (don't override `transform`,
+  // it carries the position).
+  const dragStyle: CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    touchAction: 'none',
+    cursor: disabled ? undefined : isDragging ? 'grabbing' : 'grab',
+    transform: `translate(${position.x}px, ${position.y}px)`,
+    userSelect: 'none',
+  }
+
   const dragHandleProps = {
     ref: ref as Ref<HTMLElement>,
     onPointerDown: handlePointerDown,
-    style: {
-      touchAction: 'none',
-      cursor: disabled ? undefined : isDragging ? 'grabbing' : 'grab',
-    } as CSSProperties,
     'aria-grabbed': isDragging,
   }
 
-  return { ref, position, isDragging, dragHandleProps, setPosition }
+  return { ref, position, isDragging, dragHandleProps, dragStyle, setPosition }
 }

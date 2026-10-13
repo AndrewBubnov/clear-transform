@@ -42,17 +42,26 @@ Or the hook, when you need your own node:
 ```tsx
 import { useDraggable } from 'clear-transform'
 
-const { position, isDragging, dragHandleProps } = useDraggable({
+const { position, isDragging, dragHandleProps, dragStyle } = useDraggable({
   defaultPosition: { x: 0, y: 0 },
   bounds: { minX: 0, minY: 0, maxX: 400, maxY: 300 },
   grid: 8, // snap step in px, 0 = off
   onDragEnd: (pos) => console.log(pos),
 })
 
-return <div {...dragHandleProps} style={{ ...dragHandleProps.style, transform: `translate(${position.x}px, ${position.y}px)` }} />
+// dragStyle carries everything visual (absolute origin, touch, cursor,
+// transform) — spread it first, your style after (don't override `transform`).
+return <div {...dragHandleProps} style={{ ...dragStyle, borderRadius: 8 }} />
 ```
 
 Controlled mode: pass `position` + `onPositionChange` instead of `defaultPosition`.
+
+> `dragStyle` positions the node absolutely (`top: 0; left: 0`, translate maps
+> to the relative container origin). This is on purpose: in-flow translated
+> boxes keep their layout footprint (visual overflow grows a page scrollbar)
+> and slide under positioned siblings, losing pointer events. If you need an
+> in-flow transform-drag instead, override it in your own style —
+> `style={{ ...dragStyle, position: 'static' }}`.
 
 ### Resize (8 handles)
 
